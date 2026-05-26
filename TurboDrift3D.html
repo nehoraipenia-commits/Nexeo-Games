@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Turbo Drift 3D - Coastal Circuit</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Tone.js pour l'audio procédural -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      background-color: #050b14;
+    }
+    .font-hud {
+      font-family: 'Orbitron', sans-serif;
+    }
+    /* Style pour flouter l'arrière-plan des panneaux */
+    .glassmorphism {
+      background: rgba(10, 20, 38, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    /* Cacher les barres de défilement */
+    ::-webkit-scrollbar {
+      display: none;
+    }
+    /* Animation du compte à rebours */
+    @keyframes pulse-countdown {
+      0% { transform: scale(0.5); opacity: 0; }
+      10% { opacity: 1; }
+      80% { transform: scale(1.2); opacity: 1; }
+      100% { transform: scale(1.5); opacity: 0; }
+    }
+    .countdown-animate {
+      animation: pulse-countdown 1s ease-out forwards;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Écran de chargement / Accueil -->
+  <div id="lobby-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white px-4 text-center">
+    <div class="max-w-md w-full glassmorphism p-8 rounded-3xl shadow-2xl border border-blue-500/30 transform transition-all">
+      <div class="text-xs font-bold tracking-widest text-cyan-400 mb-2 uppercase">Arcade Racing Experience</div>
+      <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight font-hud bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-teal-300 to-indigo-400 mb-2">
+        TURBO DRIFT
+      </h1>
+      <p class="text-gray-400 text-sm mb-6">A paradise coastal circuit in 3D. Master the art of gliding, pass the checkpoints and beat the lap record !</p>
+      
+      <!-- Sélection de couleur de la voiture -->
+      <div class="mb-6">
+        <label class="block text-xs font-bold tracking-wider text-gray-300 mb-2 uppercase">Couleur du bolide</label>
+        <div class="flex justify-center space-x-3">
+          <button onclick="selectCarColor('#ef4444', this)" class="w-8 h-8 rounded-full bg-red-500 border-2 border-white scale-125 transition-transform cursor-pointer color-btn" title="Rouge Racing"></button>
+          <button onclick="selectCarColor('#06b6d4', this)" class="w-8 h-8 rounded-full bg-cyan-500 border-2 border-transparent hover:scale-110 transition-transform cursor-pointer color-btn" title="Bleu Électrique"></button>
+          <button onclick="selectCarColor('#eab308', this)" class="w-8 h-8 rounded-full bg-yellow-500 border-2 border-transparent hover:scale-110 transition-transform cursor-pointer color-btn" title="Jaune Nitro"></button>
+          <button onclick="selectCarColor('#10b981', this)" class="w-8 h-8 rounded-full bg-emerald-500 border-2 border-transparent hover:scale-110 transition-transform cursor-pointer color-btn" title="Vert Toxique"></button>
+          <button onclick="selectCarColor('#a855f7', this)" class="w-8 h-8 rounded-full bg-purple-500 border-2 border-transparent hover:scale-110 transition-transform cursor-pointer color-btn" title="Violet Néon"></button>
+        </div>
+      </div>
+
+      <!-- Instructions clavier -->
+      <div class="text-left bg-slate-900/60 rounded-xl p-4 mb-6 border border-slate-800 text-xs text-gray-400 space-y-2">
+        <div class="flex justify-between"><span class="font-bold text-white">Z / ↑ (or W) :</span> Accelerate</div>
+        <div class="flex justify-between"><span class="font-bold text-white">S / ↓ :</span> Brake / Reverse</div>
+        <div class="flex justify-between"><span class="font-bold text-white">Q - D / ← - → :</span> Turn</div>
+        <div class="flex justify-between"><span class="font-bold text-white">Space :</span> Handbrake (Drift !)</div>
+        <div class="flex justify-between"><span class="font-bold text-white">R :</span> Reset the car</div>
+      </div>
+
+      <button id="start-btn" class="w-full py-4 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-cyan-500/20 active:scale-[0.98] transition-all font-hud text-lg cursor-pointer">
+        CONTROL (ACTIVATE AUDIO)
+      </button>
+    </div>
+  </div>
+
+  <!-- HUD Principal -->
+  <div id="hud-layer" class="fixed inset-0 pointer-events-none z-30 flex flex-col justify-between p-4 md:p-6 text-white opacity-0 transition-opacity duration-500">
+    
+    <!-- Top HUD : Temps & Checkpoints -->
+    <div class="flex justify-between items-start w-full">
+      
+      <!-- Chronomètre & Tour -->
+      <div class="glassmorphism p-3 md:p-4 rounded-2xl flex items-center space-x-4">
+        <div class="border-r border-white/10 pr-4">
+          <div class="text-[10px] text-cyan-400 font-bold tracking-widest uppercase mb-0.5">Current Time</div>
+          <div id="timer-val" class="text-xl md:text-2xl font-black font-hud text-white">00:00.00</div>
+        </div>
+        <div>
+          <div class="text-[10px] text-teal-400 font-bold tracking-widest uppercase mb-0.5">Best Tour</div>
+          <div id="best-val" class="text-xl md:text-2xl font-black font-hud text-teal-300">--:--.--</div>
+        </div>
+      </div>
+
+      <!-- Audio Toggle & Reset (Boutons interactifs réactivés par pointer-events-auto) -->
+      <div class="flex space-x-2 pointer-events-auto">
+        <button id="audio-toggle" class="p-3 bg-slate-900/80 hover:bg-slate-800 rounded-xl border border-white/10 flex items-center justify-center transition-colors cursor-pointer" title="Couper/Activer le son">
+          <svg id="audio-icon-on" class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M12 18.75V5.25L7.75 9.5H4.5v5h3.25L12 18.75z"></path>
+          </svg>
+          <svg id="audio-icon-off" class="w-5 h-5 text-gray-500 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path>
+          </svg>
+        </button>
+        <button id="reset-car-btn" class="px-4 py-2 bg-slate-900/80 hover:bg-slate-800 rounded-xl border border-white/10 font-bold text-xs tracking-wider transition-colors cursor-pointer flex items-center space-x-2">
+          <span>RESET</span>
+          <kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-[10px]">R</kbd>
+        </button>
+      </div>
+    </div>
+
+    <!-- Centre : Compte à rebours & Alertes -->
+    <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+      <div id="countdown-text" class="text-7xl md:text-8xl font-black font-hud text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-amber-500 select-none scale-0 opacity-0">3</div>
+      <div id="drift-alert" class="text-sm font-black font-hud text-cyan-400 bg-cyan-950/80 border border-cyan-500/30 px-4 py-1.5 rounded-full tracking-widest uppercase shadow-lg shadow-cyan-500/10 opacity-0 transition-all scale-75 mt-32">
+        GOOD DRIFT !
+      </div>
+    </div>
+
+    <!-- Bottom HUD : Tachymètre & Mini-carte -->
+    <div class="flex justify-between items-end w-full">
+      
+      <!-- Tachymètre moderne -->
+      <div class="glassmorphism p-4 rounded-2xl w-44 md:w-52 flex flex-col justify-between relative overflow-hidden">
+        <!-- Fond déco néon -->
+        <div class="absolute -bottom-10 -left-10 w-24 h-24 bg-cyan-500/10 rounded-full blur-2xl"></div>
+        
+        <div class="flex justify-between items-start mb-1 z-10">
+          <div>
+            <div class="text-[9px] text-gray-400 font-bold tracking-widest uppercase">Engine Speed</div>
+            <div class="text-2xl md:text-3xl font-black font-hud text-white flex items-baseline">
+              <span id="speed-val">0</span>
+              <span class="text-[10px] text-gray-400 ml-1">km/h</span>
+            </div>
+          </div>
+          <!-- Rapport de vitesse -->
+          <div class="text-right">
+            <div class="text-[9px] text-gray-300 font-bold tracking-widest mb-0.5 uppercase">Report</div>
+            <div id="gear-val" class="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-lg font-black font-hud text-cyan-400">N</div>
+          </div>
+        </div>
+        
+        <!-- Barre de RPM -->
+        <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden mt-2 z-10 flex">
+          <div id="rpm-bar" class="h-full bg-gradient-to-r from-cyan-400 via-teal-400 to-red-500 transition-all duration-75" style="width: 10%"></div>
+        </div>
+        
+        <!-- Checkpoint Tracker -->
+        <div class="mt-3 flex justify-between items-center text-[10px] text-gray-400 border-t border-white/5 pt-2 z-10">
+          <span>CHECKPOINTS :</span>
+          <span id="checkpoint-progress" class="font-bold text-white font-hud">0 / 4</span>
+        </div>
+      </div>
+
+      <!-- Mini-carte 2D interactive -->
+      <div class="glassmorphism p-2 rounded-2xl relative w-32 h-32 md:w-36 md:h-36">
+        <canvas id="minimap-canvas" width="128" height="128" class="w-full h-full opacity-90"></canvas>
+        <div class="absolute top-1 left-2 text-[8px] text-cyan-300 font-bold tracking-widest uppercase">MAP</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Commandes Tactiles Mobiles (Visible uniquement sur mobile/tablette) -->
+  <div id="mobile-controls" class="fixed inset-0 pointer-events-none z-40 hidden flex-col justify-end p-4">
+    <div class="flex justify-between w-full">
+      <!-- Joystick de direction gauche / droite -->
+      <div class="flex space-x-3 pointer-events-auto">
+        <button id="btn-left" class="w-16 h-16 rounded-2xl bg-slate-900/60 active:bg-cyan-500/40 border border-white/10 flex items-center justify-center text-white text-2xl active:scale-95 transition-all">
+          <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path>
+          </svg>
+        </button>
+        <button id="btn-right" class="w-16 h-16 rounded-2xl bg-slate-900/60 active:bg-cyan-500/40 border border-white/10 flex items-center justify-center text-white text-2xl active:scale-95 transition-all">
+          <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Accélérateur, Frein & Frein à main -->
+      <div class="flex items-end space-x-3 pointer-events-auto">
+        <!-- Frein à main / Drift -->
+        <button id="btn-drift" class="w-14 h-14 rounded-full bg-indigo-900/60 active:bg-indigo-500/50 border border-indigo-500/30 flex flex-col items-center justify-center text-white active:scale-95 transition-all">
+          <span class="text-[8px] font-black tracking-tighter">DRIFT</span>
+          <svg class="w-5 h-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+        </button>
+        <!-- Frein / Arrière -->
+        <button id="btn-brake" class="w-16 h-16 rounded-2xl bg-red-900/50 active:bg-red-500/40 border border-red-500/20 flex items-center justify-center text-white text-xl active:scale-95 transition-all">
+          <span class="text-xs font-bold font-hud">S</span>
+        </button>
+        <!-- Accélérateur -->
+        <button id="btn-gas" class="w-18 h-20 rounded-2xl bg-emerald-950/60 active:bg-emerald-500/40 border border-emerald-500/30 flex items-center justify-center text-white text-2xl active:scale-95 transition-all">
+          <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    
+    // Configuration globale et variables de jeu
+    let audioEnabled = false;
+    let selectedCarColorValue = '#ef4444'; // Rouge par défaut
+    
+    // Détection mobile pour afficher les commandes tactiles
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isMobile) {
+      document.getElementById('mobile-controls').classList.remove('hidden');
+    }
+
+    // Gestion du choix de couleur du bolide
+    window.selectCarColor = function(color, btnElement) {
+      selectedCarColorValue = color;
+      
+      // Mettre à jour l'état visuel des boutons de couleur
+      document.querySelectorAll('.color-btn').forEach(btn => {
+        btn.classList.remove('scale-125', 'border-white');
+        btn.classList.add('hover:scale-110', 'border-transparent');
+      });
+      btnElement.classList.add('scale-125', 'border-white');
+      btnElement.classList.remove('hover:scale-110', 'border-transparent');
+      
+      // Mettre à jour le matériau de la voiture si elle est déjà instanciée
+      if (carMaterials && carMaterials.body) {
+        carMaterials.body.color.setHex(parseInt(color.replace('#', '0x')));
+      }
+    };
+
+    // Synthèse audio dynamique avec Tone.js
+    let engineOsc, engineFilter, engineVolume;
+    let skidOsc, skidFilter, skidVolume;
+    let crashNoise, crashVolume;
+
+    function initAudio() {
+      if (audioEnabled) return;
+      
+      try {
+        Tone.start();
+        
+        // Synthétiseur moteur (vrombissement)
+        engineVolume = new Tone.Volume(-15).toDestination();
+        engineFilter = new Tone.Filter({
+          type: "lowpass",
+          frequency: 300,
+          Q: 1
+        }).connect(engineVolume);
+        
+        engineOsc = new Tone.Oscillator({
+          type: "sawtooth",
+          frequency: 50
+        }).connect(engineFilter).start();
+
+        // Synthétiseur crissement pneus
+        skidVolume = new Tone.Volume(-100).toDestination(); // Commencer muet
+        skidFilter = new Tone.Filter({
+          type: "bandpass",
+          frequency: 800,
+          Q: 2
+        }).connect(skidVolume);
+        
+        skidOsc = new Tone.Noise({
+          type: "pink"
+        }).connect(skidFilter).start();
+
+        // Son d'impact / crash
+        crashVolume = new Tone.Volume(-100).toDestination();
+        const crashFilter = new Tone.Filter(200, "lowpass").connect(crashVolume);
+        crashNoise = new Tone.Noise("brown").connect(crashFilter).start();
+
+        audioEnabled = true;
+      } catch (err) {
+        console.warn("Audio initialization failed :", err);
+      }
+    }
+
+    function updateAudioEffects(speedRatio, isDrifting, isBraking) {
+      if (!audioEnabled) return;
+
+      // 1. Son moteur
+      // Fréquence de base augmente avec la vitesse de la voiture
+      const targetFreq = 45 + (speedRatio * 180);
+      engineOsc.frequency.setValueAtTime(targetFreq, Tone.now());
+      // Plus on va vite, plus le filtre s'ouvre pour faire du bruit
+      engineFilter.frequency.setValueAtTime(250 + (speedRatio * 1200), Tone.now());
+      
+      // 2. Crissement de pneus
+      if ((isDrifting && speedRatio > 0.15) || (isBraking && speedRatio > 0.3)) {
+        skidVolume.volume.rampTo(-14, 0.05);
+      } else {
+        skidVolume.volume.rampTo(-100, 0.1);
+      }
+    }
+
+    function triggerCrashSound() {
+      if (!audioEnabled) return;
+      crashVolume.volume.value = -5;
+      crashVolume.volume.rampTo(-100, 0.4);
+    }
+
+    // Toggle Audio button logic
+    const audioToggleBtn = document.getElementById('audio-toggle');
+    const audioOnIcon = document.getElementById('audio-icon-on');
+    const audioOffIcon = document.getElementById('audio-icon-off');
+
+    audioToggleBtn.addEventListener('click', () => {
+      if (!audioEnabled) {
+        initAudio();
+        audioOnIcon.classList.remove('hidden');
+        audioOffIcon.classList.add('hidden');
+      } else {
+        // Mute
+        engineVolume.volume.value = -100;
+        skidVolume.volume.value = -100;
+        audioOnIcon.classList.add('hidden');
+        audioOffIcon.classList.remove('hidden');
+        audioEnabled = false;
+      }
+    });
+
+    // Initialisation 3D
+    const scene = new THREE.Scene();
+    // Brume côtière stylisée pour simuler la profondeur
+    scene.background = new THREE.Color(0xb0e3ff);
+    scene.fog = new THREE.FogExp2(0xb0e3ff, 0.003);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1500);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    document.body.appendChild(renderer.domElement);
+
+    // Ajustement fenêtre
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Lumières du monde
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+    scene.add(ambientLight);
+
+    const sunLight = new THREE.DirectionalLight(0xfff5e6, 1.4);
+    sunLight.position.set(150, 220, 80);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 0.5;
+    sunLight.shadow.camera.far = 800;
+    const d = 350;
+    sunLight.shadow.camera.left = -d;
+    sunLight.shadow.camera.right = d;
+    sunLight.shadow.camera.top = d;
+    sunLight.shadow.camera.bottom = -d;
+    sunLight.shadow.bias = -0.0005;
+    scene.add(sunLight);
+
+    // Palette de matériaux
+    const materials = {
+      grass: new THREE.MeshStandardMaterial({ color: 0x4fb876, roughness: 0.85, metalness: 0.05 }),
+      sand: new THREE.MeshStandardMaterial({ color: 0xe0ca9b, roughness: 0.9 }),
+      asphalt: new THREE.MeshStandardMaterial({ color: 0x242830, roughness: 0.75 }),
+      curbRed: new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.6 }),
+      curbWhite: new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.6 }),
+      barrier: new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.5, metalness: 0.4 }),
+      neonRing: new THREE.MeshBasicMaterial({ color: 0x00f3ff, transparent: true, opacity: 0.85, wireframe: true }),
+      water: new THREE.MeshStandardMaterial({ color: 0x00a8cc, roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.82 }),
+      trunk: new THREE.MeshStandardMaterial({ color: 0x6e503b, roughness: 0.9 }),
+      leaves: new THREE.MeshStandardMaterial({ color: 0x1d914d, roughness: 0.8 }),
+      rock: new THREE.MeshStandardMaterial({ color: 0x5a6372, roughness: 0.9 }),
+      cloud: new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 })
+    };
+
+    // Matériaux de la voiture (modifiables dynamiquement)
+    const carMaterials = {
+      body: new THREE.MeshStandardMaterial({ roughness: 0.15, metalness: 0.8 }),
+      glass: new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.1, metalness: 0.9, transparent: true, opacity: 0.9 }),
+      wheel: new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 }),
+      rims: new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 0.3, metalness: 0.8 }),
+      headlight: new THREE.MeshBasicMaterial({ color: 0xfffee0 }),
+      taillight: new THREE.MeshBasicMaterial({ color: 0xef4444 })
+    };
+    // Appliquer la couleur de voiture sélectionnée initialement
+    carMaterials.body.color.setHex(parseInt(selectedCarColorValue.replace('#', '0x')));
+
+    // Définition de la piste (Spline fermée)
+    const trackPoints = [
+      new THREE.Vector3(0, 0.1, 0),        // Départ
+      new THREE.Vector3(120, 0.1, -40),    // Courbe douce à droite
+      new THREE.Vector3(250, 0.1, 40),     // Chicane droite
+      new THREE.Vector3(340, 0.1, -120),   // Ligne droite arrière
+      new THREE.Vector3(260, 0.1, -280),   // Épingle à cheveux serrée
+      new THREE.Vector3(100, 0.1, -220),   // Passage sinueux (S-curves)
+      new THREE.Vector3(-40, 0.1, -300),   // Suite sinueuse
+      new THREE.Vector3(-180, 0.1, -190),  // Grande courbe rapide
+      new THREE.Vector3(-240, 0.1, -50),   // Entrée de la ligne droite
+      new THREE.Vector3(-120, 0.1, 60),    // Dernière chicane
+    ];
+    
+    const trackSpline = new THREE.CatmullRomCurve3(trackPoints, true); // True pour fermer le circuit
+    const trackWidth = 26;
+    const curbWidth = 1.2;
+
+    // Génération de la géométrie de la route
+    const numSegments = 180;
+    const roadGeometry = new THREE.BufferGeometry();
+    const positions = [];
+    const normals = [];
+    const uvs = [];
+    const indices = [];
+
+    // Tableaux pour stocker les repères géométriques pour collision et décors
+    const roadCenterPoints = [];
+    const roadLeftEdges = [];
+    const roadRightEdges = [];
+
+    // Échantillonner des points le long de la courbe
+    for (let i = 0; i <= numSegments; i++) {
+      const t = i / numSegments;
+      const point = trackSpline.getPointAt(t);
+      const tangent = trackSpline.getTangentAt(t).normalize();
+      
+      // Calculer le vecteur "droite" à plat par rapport au sol (tangente x (0,1,0))
+      const up = new THREE.Vector3(0, 1, 0);
+      const right = new THREE.Vector3().crossVectors(tangent, up).normalize();
+
+      roadCenterPoints.push(point.clone());
+      roadLeftEdges.push(point.clone().addScaledVector(right, -trackWidth / 2));
+      roadRightEdges.push(point.clone().addScaledVector(right, trackWidth / 2));
+    }
+
+    // Créer les polygones de la route
+    for (let i = 0; i < numSegments; i++) {
+      const p1_L = roadLeftEdges[i];
+      const p1_R = roadRightEdges[i];
+      const p2_L = roadLeftEdges[i+1];
+      const p2_R = roadRightEdges[i+1];
+
+      // Index de départ pour ce segment dans le tableau
+      const idx = i * 4;
+
+      // Ajouter les sommets
+      positions.push(p1_L.x, p1_L.y, p1_L.z); // Bas Gauche (0)
+      positions.push(p1_R.x, p1_R.y, p1_R.z); // Bas Droite (1)
+      positions.push(p2_L.x, p2_L.y, p2_L.z); // Haut Gauche (2)
+      positions.push(p2_R.x, p2_R.y, p2_R.z); // Haut Droite (3)
+
+      for (let j = 0; j < 4; j++) {
+        normals.push(0, 1, 0);
+      }
+
+      // UVs simples pour textures ou effets
+      uvs.push(0, 0,  1, 0,  0, 1,  1, 1);
+
+      // Deux triangles pour faire un quad de route
+      indices.push(idx, idx + 2, idx + 1);
+      indices.push(idx + 1, idx + 2, idx + 3);
+    }
+
+    roadGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    roadGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    roadGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    roadGeometry.setIndex(indices);
+
+    const roadMesh = new THREE.Mesh(roadGeometry, materials.asphalt);
+    roadMesh.receiveShadow = true;
+    scene.add(roadMesh);
+
+    // Génération des vibreurs (curbs) rouge / blanc alternés
+    const curbGeoLeft = new THREE.BufferGeometry();
+    const curbGeoRight = new THREE.BufferGeometry();
+    const curbMatGroup = []; // Contient les index de matériaux pour alterner
+
+    function buildCurbs(edges, sideSign) {
+      const curbPositions = [];
+      const curbNormals = [];
+      const curbIndices = [];
+      
+      for (let i = 0; i < numSegments; i++) {
+        // Obtenir la direction de décalage vers l'extérieur pour faire de l'épaisseur
+        const point = trackSpline.getPointAt(i / numSegments);
+        const tangent = trackSpline.getTangentAt(i / numSegments).normalize();
+        const right = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize();
+        
+        const p1_inner = edges[i];
+        const p1_outer = p1_inner.clone().addScaledVector(right, sideSign * curbWidth);
+        const p2_inner = edges[i+1];
+        const p2_outer = p2_inner.clone().addScaledVector(right, sideSign * curbWidth);
+        
+        // Surélever légèrement le vibreur pour l'effet 3D
+        p1_inner.y += 0.08; p1_outer.y += 0.15;
+        p2_inner.y += 0.08; p2_outer.y += 0.15;
+
+        const idx = i * 4;
+        curbPositions.push(p1_inner.x, p1_inner.y, p1_inner.z);
+        curbPositions.push(p1_outer.x, p1_outer.y, p1_outer.z);
+        curbPositions.push(p2_inner.x, p2_inner.y, p2_inner.z);
+        curbPositions.push(p2_outer.x, p2_outer.y, p2_outer.z);
+
+        for(let j=0; j<4; j++) curbNormals.push(0, 1, 0);
+
+        curbIndices.push(idx, idx + 2, idx + 1);
+        curbIndices.push(idx + 1, idx + 2, idx + 3);
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(curbPositions, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(curbNormals, 3));
+      geo.setIndex(curbIndices);
+      
+      // On crée des groupes de triangles pour appliquer alternativement rouge et blanc
+      const trisPerSegment = 2;
+      const indicesPerSegment = 6;
+      for (let i = 0; i < numSegments; i++) {
+        const materialIndex = (Math.floor(i / 2) % 2 === 0) ? 0 : 1; // alterne toutes les 2 tranches
+        geo.addGroup(i * indicesPerSegment, indicesPerSegment, materialIndex);
+      }
+      return geo;
+    }
+
+    const sideL = buildCurbs(roadLeftEdges, -1);
+    const sideR = buildCurbs(roadRightEdges, 1);
+
+    const curbGroupMaterials = [materials.curbRed, materials.curbWhite];
+    const curbLeftMesh = new THREE.Mesh(sideL, curbGroupMaterials);
+    const curbRightMesh = new THREE.Mesh(sideR, curbGroupMaterials);
+    curbLeftMesh.castShadow = true;
+    curbLeftMesh.receiveShadow = true;
+    curbRightMesh.castShadow = true;
+    curbRightMesh.receiveShadow = true;
+
+    scene.add(curbLeftMesh, curbRightMesh);
+
+    // Île et eau environnante
+    const islandGeo = new THREE.PlaneGeometry(1300, 1300);
+    const island = new THREE.Mesh(islandGeo, materials.grass);
+    island.rotation.x = -Math.PI / 2;
+    island.position.y = -0.05;
+    island.receiveShadow = true;
+    scene.add(island);
+
+    // Mer géante
+    const oceanGeo = new THREE.PlaneGeometry(3500, 3500);
+    const ocean = new THREE.Mesh(oceanGeo, materials.water);
+    ocean.rotation.x = -Math.PI / 2;
+    ocean.position.y = -2.2;
+    ocean.receiveShadow = true;
+    scene.add(ocean);
+
+    // Une plage de sable pour le rivage intérieur/extérieur
+    const beachGeo = new THREE.RingGeometry(550, 680, 32);
+    const beach = new THREE.Mesh(beachGeo, materials.sand);
+    beach.rotation.x = -Math.PI / 2;
+    beach.position.set(0, -0.15, -120);
+    beach.receiveShadow = true;
+    scene.add(beach);
+
+    // Obstacles, Décors et Collisions secondaires
+    const obstacleColliders = []; // Pour d'éventuels rochers sur le bas-côté
+
+    // Fonction de création de palmier procédural
+    function createPalmTree(x, z) {
+      const palm = new THREE.Group();
+      palm.position.set(x, 0, z);
+
+      // Tronc courbé
+      const trunkParts = 5;
+      const trunkHeight = 1.8;
+      let currentY = 0;
+      let currentX = 0;
+      let lastAngle = 0;
+
+      for (let i = 0; i < trunkParts; i++) {
+        const radius = 0.45 - (i * 0.05);
+        const geo = new THREE.CylinderGeometry(radius * 0.8, radius, trunkHeight, 8);
+        const part = new THREE.Mesh(geo, materials.trunk);
+        
+        part.position.set(currentX, currentY + trunkHeight/2, 0);
+        // Courbe légère vers l'extérieur
+        const angle = 0.07 * (i + 1);
+        part.rotation.z = angle;
+        
+        palm.add(part);
+        currentY += trunkHeight * Math.cos(angle);
+        currentX -= trunkHeight * Math.sin(angle);
+      }
+
+      // Feuilles de palmier (Eventail de cônes/boîtes)
+      const leavesCount = 6;
+      for (let i = 0; i < leavesCount; i++) {
+        const leafAngle = (i / leavesCount) * Math.PI * 2;
+        const leafGeo = new THREE.BoxGeometry(0.8, 0.08, 4);
+        const leaf = new THREE.Mesh(leafGeo, materials.leaves);
+        
+        leaf.position.set(currentX + Math.sin(leafAngle)*1.8, currentY - 0.2, Math.cos(leafAngle)*1.8);
+        leaf.rotation.y = -leafAngle;
+        leaf.rotation.x = 0.25; // Inclinaison vers le bas
+        leaf.castShadow = true;
+        palm.add(leaf);
+      }
+
+      palm.castShadow = true;
+      scene.add(palm);
+    }
+
+    // Création de rochers décoratifs
+    function createRock(x, y, z, scale = 1) {
+      const rockGeo = new THREE.DodecahedronGeometry(scale, 1);
+      const rock = new THREE.Mesh(rockGeo, materials.rock);
+      rock.position.set(x, y, z);
+      rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+      rock.castShadow = true;
+      rock.receiveShadow = true;
+      scene.add(rock);
+
+      // Ajouter aux colliders si proche de la route
+      obstacleColliders.push({
+        position: new THREE.Vector3(x, y, z),
+        radius: scale * 0.95
+      });
+    }
+
+    // Distribuer des palmiers et rochers le long de la piste (uniquement à l'extérieur des vibreurs)
+    for (let i = 0; i < numSegments; i += 4) {
+      const t = i / numSegments;
+      const point = trackSpline.getPointAt(t);
+      const tangent = trackSpline.getTangentAt(t).normalize();
+      const right = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize();
+
+      // Aléatoire gauche ou droite de la route
+      const side = Math.random() > 0.5 ? 1 : -1;
+      const distanceOffroad = 18 + Math.random() * 25;
+      const objectX = point.x + right.x * side * distanceOffroad;
+      const objectZ = point.z + right.z * side * distanceOffroad;
+
+      if (Math.random() > 0.45) {
+        createPalmTree(objectX, objectZ);
+      } else {
+        const scale = 2 + Math.random() * 5;
+        createRock(objectX, scale/2 - 0.3, objectZ, scale);
+      }
+    }
+
+    // Ajout de 4 Checkpoints lumineux (Portails) sous forme d'anneaux géants
+    const checkpoints = [
+      { t: 0.25, pos: trackSpline.getPointAt(0.25), passed: false },
+      { t: 0.50, pos: trackSpline.getPointAt(0.50), passed: false },
+      { t: 0.75, pos: trackSpline.getPointAt(0.75), passed: false },
+      { t: 0.99, pos: trackSpline.getPointAt(0.99), passed: false } // Proche ligne d'arrivée
+    ];
+
+    const checkpointMeshes = [];
+    checkpoints.forEach((cp, index) => {
+      // Obtenir l'orientation
+      const tangent = trackSpline.getTangentAt(cp.t).normalize();
+      
+      const cpGroup = new THREE.Group();
+      cpGroup.position.copy(cp.pos);
+      cpGroup.position.y = 4.5; // Surélever
+      
+      // Orienter le groupe selon la direction de la piste
+      const targetAngle = Math.atan2(tangent.x, tangent.z);
+      cpGroup.rotation.y = targetAngle;
+
+      // Arche néon (Ring)
+      const ringGeo = new THREE.TorusGeometry(8, 0.4, 8, 24);
+      const ring = new THREE.Mesh(ringGeo, materials.neonRing);
+      cpGroup.add(ring);
+
+      // Spot lumineux pointant vers le bas
+      const cpLight = new THREE.PointLight(0x00f3ff, 2, 25, 0.5);
+      cpLight.position.y = 3;
+      cpGroup.add(cpLight);
+
+      scene.add(cpGroup);
+      checkpointMeshes.push(cpGroup);
+    });
+
+    // Ligne de départ/arrivée peinte sur la route
+    const startLineGeo = new THREE.PlaneGeometry(trackWidth, 1.8);
+    const startLineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+    const startLine = new THREE.Mesh(startLineGeo, startLineMat);
+    startLine.rotation.x = -Math.PI / 2;
+    startLine.position.copy(trackPoints[0]);
+    startLine.position.y = 0.12; // Juste au dessus de la route
+    const startTangent = trackSpline.getTangentAt(0).normalize();
+    startLine.rotation.z = -Math.atan2(startTangent.z, startTangent.x);
+    scene.add(startLine);
+
+    // Modélisation procédurale low-poly de la voiture de course
+    const car = new THREE.Group();
+    car.position.copy(trackPoints[0]);
+    car.position.y = 0.5;
+
+    // 1. Châssis (corps central de la voiture)
+    const bodyBox = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.6, 5), carMaterials.body);
+    bodyBox.position.y = 0.45;
+    bodyBox.castShadow = true;
+    bodyBox.receiveShadow = true;
+    car.add(bodyBox);
+
+    // 2. Cockpit vitré
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.45, 2.2), carMaterials.glass);
+    cabin.position.set(0, 0.85, -0.2);
+    cabin.castShadow = true;
+    car.add(cabin);
+
+    // 3. Phares avants (gauche et droite)
+    const headlightL = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.12, 0.25), carMaterials.headlight);
+    headlightL.position.set(-0.85, 0.4, 2.4);
+    const headlightR = headlightL.clone();
+    headlightR.position.x = 0.85;
+    car.add(headlightL, headlightR);
+
+    // Phares réels émettant de la lumière pour la nuit/brouillard
+    const lightTarget = new THREE.Object3D();
+    lightTarget.position.set(0, 0.4, 20);
+    car.add(lightTarget);
+
+    const carBeamL = new THREE.SpotLight(0xfffee0, 4, 45, Math.PI / 7, 0.5, 0.5);
+    carBeamL.position.set(-0.85, 0.4, 2.5);
+    carBeamL.target = lightTarget;
+    car.add(carBeamL);
+
+    const carBeamR = carBeamL.clone();
+    carBeamR.position.x = 0.85;
+    carBeamR.target = lightTarget;
+    car.add(carBeamR);
+
+    // 4. Feux arrières (taillights)
+    const taillightL = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.15), carMaterials.taillight);
+    taillightL.position.set(-0.85, 0.45, -2.48);
+    const taillightR = taillightL.clone();
+    taillightR.position.x = 0.85;
+    car.add(taillightL, taillightR);
+
+    // 5. Spoiler arrière (Aileron de course)
+    const spoilerPostL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.15), carMaterials.body);
+    spoilerPostL.position.set(-0.9, 0.8, -2.2);
+    const spoilerPostR = spoilerPostL.clone();
+    spoilerPostR.position.x = 0.9;
+    
+    const spoilerWing = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.08, 0.6), carMaterials.body);
+    spoilerWing.position.set(0, 1.0, -2.2);
+    spoilerWing.castShadow = true;
+    
+    car.add(spoilerPostL, spoilerPostR, spoilerWing);
+
+    // 6. Roues (4 roues)
+    const wheels = [];
+    const wheelPositions = [
+      { x: -1.25, y: 0.18, z: 1.5, id: 'front-left' },  // Avant Gauche
+      { x: 1.25, y: 0.18, z: 1.5, id: 'front-right' },  // Avant Droite
+      { x: -1.25, y: 0.18, z: -1.4, id: 'rear-left' }, // Arrière Gauche
+      { x: 1.25, y: 0.18, z: -1.4, id: 'rear-right' }  // Arrière Droite
+    ];
+
+    wheelPositions.forEach(pos => {
+      const wheelGroup = new THREE.Group();
+      wheelGroup.position.set(pos.x, pos.y, pos.z);
+
+      // Pneu
+      const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.45, 16), carMaterials.wheel);
+      tire.rotation.z = Math.PI / 2;
+      tire.castShadow = true;
+      wheelGroup.add(tire);
+
+      // Jante
+      const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.48, 8), carMaterials.rims);
+      rim.rotation.z = Math.PI / 2;
+      wheelGroup.add(rim);
+
+      car.add(wheelGroup);
+      wheels.push(wheelGroup);
+    });
+
+    scene.add(car);
+
+    // Système de particules (Étincelles de drift et fumée)
+    const particleCount = 65;
+    const particleGeometry = new THREE.BufferGeometry();
+    const particlePositions = new Float32Array(particleCount * 3);
+    const particleVelocities = [];
+    const particleAges = new Float32Array(particleCount);
+    
+    for (let i = 0; i < particleCount; i++) {
+      // Positionner au loin au démarrage
+      particlePositions[i*3] = 0;
+      particlePositions[i*3+1] = -100;
+      particlePositions[i*3+2] = 0;
+      
+      particleVelocities.push(new THREE.Vector3(0, 0, 0));
+      particleAges[i] = 100.0; // Mort au départ
+    }
+
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    
+    const particleMat = new THREE.PointsMaterial({
+      color: 0xffaa44,
+      size: 0.4,
+      transparent: true,
+      opacity: 0.8,
+      blending: THREE.AdditiveBlending
+    });
+
+    const particleSystem = new THREE.Points(particleGeometry, particleMat);
+    scene.add(particleSystem);
+
+    function spawnDriftParticles(pos, count = 2) {
+      const pArr = particleGeometry.attributes.position.array;
+      let spawned = 0;
+
+      for (let i = 0; i < particleCount; i++) {
+        if (particleAges[i] >= 1.0) { // Emplacement de particule morte libre
+          particleAges[i] = 0.0;
+          
+          // Position de départ proche des pneus arrières
+          pArr[i*3] = pos.x + (Math.random() - 0.5) * 1.5;
+          pArr[i*3+1] = pos.y - 0.1;
+          pArr[i*3+2] = pos.z + (Math.random() - 0.5) * 1.5;
+
+          // Vélocité vers le haut et l'arrière
+          particleVelocities[i].set(
+            (Math.random() - 0.5) * 4.0,
+            Math.random() * 2.5 + 1.0,
+            (Math.random() - 0.5) * 4.0
+          );
+
+          spawned++;
+          if (spawned >= count) break;
+        }
+      }
+      particleGeometry.attributes.position.needsUpdate = true;
+    }
+
+    function updateParticles(dt) {
+      const pArr = particleGeometry.attributes.position.array;
+      for (let i = 0; i < particleCount; i++) {
+        if (particleAges[i] < 1.0) {
+          // Appliquer vélocité
+          pArr[i*3] += particleVelocities[i].x * dt;
+          pArr[i*3+1] += particleVelocities[i].y * dt;
+          pArr[i*3+2] += particleVelocities[i].z * dt;
+
+          // Gravité négative (fumée s'élève)
+          particleVelocities[i].y -= 2.0 * dt;
+
+          particleAges[i] += dt * 1.5; // Durée de vie
+          if (particleAges[i] >= 1.0) {
+            pArr[i*3+1] = -100; // Cacher sous la map
+          }
+        }
+      }
+      particleGeometry.attributes.position.needsUpdate = true;
+    }
+
+    // Moteur Physique de Conduite
+    const carPhysics = {
+      velocity: new THREE.Vector3(0, 0, 0),
+      speed: 0,
+      maxSpeed: 105,      // km/h équivalent
+      acceleration: 48,   // Puissance moteur
+      deceleration: 35,   // Résistance naturelle/frein moteur
+      braking: 75,        // Puissance des freins
+      steerAngle: 0,
+      maxSteer: 0.52,     // Angle max de rotation des roues
+      steerSpeed: 3.5,    // Vitesse de rotation du volant
+      friction: 0.985,    // Friction de l'air
+      driftFactor: 0.95,  // Glisse
+      isDrifting: false,
+      heading: 0,          // Angle d'orientation de la voiture (en radians)
+      yawRate: 0,
+      offRoadDrag: 0.42    // Pénalité de vitesse dans l'herbe
+    };
+
+    // États d'entrée (clavier + mobile)
+    const inputs = {
+      forward: false,
+      backward: false,
+      left: false,
+      right: false,
+      handbrake: false
+    };
+
+    // Événements Clavier
+    window.addEventListener('keydown', (e) => {
+      const key = e.key.toLowerCase();
+      if (key === 'z' || key === 'arrowup' || key === 'w') inputs.forward = true;
+      if (key === 's' || key === 'arrowdown') inputs.backward = true;
+      if (key === 'q' || key === 'arrowleft') inputs.left = true;
+      if (key === 'd' || key === 'arrowright') inputs.right = true;
+      if (e.key === ' ') inputs.handbrake = true;
+      if (key === 'r') resetCar();
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const key = e.key.toLowerCase();
+      if (key === 'z' || key === 'arrowup' || key === 'w') inputs.forward = false;
+      if (key === 's' || key === 'arrowdown') inputs.backward = false;
+      if (key === 'q' || key === 'arrowleft') inputs.left = false;
+      if (key === 'd' || key === 'arrowright') inputs.right = false;
+      if (e.key === ' ') inputs.handbrake = false;
+    });
+
+    // Événements Tactiles Mobiles
+    function setupMobileButton(id, inputProp) {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      
+      const setInput = (val) => { inputs[inputProp] = val; };
+      
+      btn.addEventListener('touchstart', (e) => { e.preventDefault(); setInput(true); });
+      btn.addEventListener('touchend', (e) => { e.preventDefault(); setInput(false); });
+      btn.addEventListener('mousedown', () => setInput(true));
+      btn.addEventListener('mouseup', () => setInput(false));
+      btn.addEventListener('mouseleave', () => setInput(false));
+    }
+
+    setupMobileButton('btn-gas', 'forward');
+    setupMobileButton('btn-brake', 'backward');
+    setupMobileButton('btn-left', 'left');
+    setupMobileButton('btn-right', 'right');
+    setupMobileButton('btn-drift', 'handbrake');
+
+    // Boucle de mise à jour physique
+    function updatePhysics(dt) {
+      if (countdownActive) {
+        // La voiture ne bouge pas pendant le décompte
+        carPhysics.speed = 0;
+        carPhysics.velocity.set(0,0,0);
+        return;
+      }
+
+      // 1. Détecter l'état Off-road (hors piste)
+      const isOffRoad = checkIfOffRoad(car.position);
+      const currentMaxSpeed = isOffRoad ? carPhysics.maxSpeed * carPhysics.offRoadDrag : carPhysics.maxSpeed;
+
+      // 2. Accélération & Freinage
+      if (inputs.forward) {
+        if (carPhysics.speed < 0) {
+          // Freinage si on reculait
+          carPhysics.speed += carPhysics.braking * dt;
+        } else {
+          carPhysics.speed += carPhysics.acceleration * dt;
+        }
+      } else if (inputs.backward) {
+        if (carPhysics.speed > 0) {
+          // Freinage si on avançait
+          carPhysics.speed -= carPhysics.braking * dt;
+        } else {
+          // Marche arrière lente
+          carPhysics.speed -= carPhysics.acceleration * 0.5 * dt;
+        }
+      } else {
+        // Décélération naturelle (frein moteur)
+        if (carPhysics.speed > 0) {
+          carPhysics.speed = Math.max(0, carPhysics.speed - carPhysics.deceleration * dt);
+        } else if (carPhysics.speed < 0) {
+          carPhysics.speed = Math.min(0, carPhysics.speed + carPhysics.deceleration * dt);
+        }
+      }
+
+      // Limiteur de vitesse
+      carPhysics.speed = THREE.MathUtils.clamp(carPhysics.speed, -30, currentMaxSpeed);
+
+      // 3. Direction (Steering)
+      const steerTarget = (inputs.left ? carPhysics.maxSteer : 0) - (inputs.right ? carPhysics.maxSteer : 0);
+      carPhysics.steerAngle = THREE.MathUtils.lerp(carPhysics.steerAngle, steerTarget, carPhysics.steerSpeed * dt);
+
+      // Pivoter les roues avant visuellement
+      wheels[0].rotation.y = carPhysics.steerAngle * 1.3; // Roue AV gauche
+      wheels[1].rotation.y = carPhysics.steerAngle * 1.3; // Roue AV droite
+
+      // 4. Calcul du Drift
+      // On drift si on tourne fort à haute vitesse ou en maintenant le frein à main (Espace)
+      const turningHard = Math.abs(carPhysics.steerAngle) > 0.28 && Math.abs(carPhysics.speed) > 40;
+      const isHandbraking = inputs.handbrake && Math.abs(carPhysics.speed) > 20;
+      
+      const wasDrifting = carPhysics.isDrifting;
+      carPhysics.isDrifting = turningHard || isHandbraking;
+
+      // Afficher l'alerte de drift
+      const driftAlert = document.getElementById('drift-alert');
+      if (carPhysics.isDrifting) {
+        driftAlert.classList.remove('opacity-0', 'scale-75');
+        driftAlert.classList.add('opacity-100', 'scale-100');
+        spawnDriftParticles(car.position, 3);
+      } else {
+        driftAlert.classList.remove('opacity-100', 'scale-100');
+        driftAlert.classList.add('opacity-0', 'scale-75');
+      }
+
+      // 5. Calcul des forces latérales (Adhérence vs Glisse)
+      // Ajustement du taux de lacet (yaw rate) pour simuler la perte d'adhérence
+      const speedFactor = Math.abs(carPhysics.speed) / carPhysics.maxSpeed;
+      let yawVelocity = carPhysics.steerAngle * (carPhysics.speed * 0.024);
+
+      if (carPhysics.isDrifting) {
+        // Plus de lacet pendant le drift, l'arrière décroche
+        const driftMultiplier = isHandbraking ? 1.85 : 1.35;
+        yawVelocity *= driftMultiplier;
+        carPhysics.speed *= 0.994; // Perte de vitesse due à la friction latérale
+      }
+
+      carPhysics.heading += yawVelocity * dt;
+
+      // Traduire la vitesse scalaires en vecteur vélocité directionnelle
+      const targetForward = new THREE.Vector3(Math.sin(carPhysics.heading), 0, Math.cos(carPhysics.heading)).normalize();
+      
+      // Interpolation lente vers la direction ciblée pour simuler la dérive/l'inertie
+      const slideFactor = carPhysics.isDrifting ? 0.08 : 0.25;
+      carPhysics.velocity.lerp(targetForward.multiplyScalar(carPhysics.speed / 3.6), slideFactor);
+
+      // Appliquer le vecteur vélocité sur la voiture
+      car.position.addScaledVector(carPhysics.velocity, dt);
+      
+      // Orientation 3D du mesh
+      car.rotation.y = carPhysics.heading;
+
+      // Inclinaison de la voiture (roulis) dans les virages
+      const turnRoll = -carPhysics.steerAngle * (carPhysics.speed / 160);
+      car.rotation.z = THREE.MathUtils.lerp(car.rotation.z, turnRoll, 0.1);
+
+      // Tourner les roues selon la vitesse d'avancement
+      const wheelRotationSpeed = (carPhysics.speed * 0.1) * dt;
+      wheels.forEach(w => {
+        w.children[0].rotation.x += wheelRotationSpeed;
+        w.children[1].rotation.x += wheelRotationSpeed;
+      });
+
+      // Mettre à jour les effets audio dynamiques
+      const absSpeedRatio = Math.abs(carPhysics.speed) / carPhysics.maxSpeed;
+      updateAudioEffects(absSpeedRatio, carPhysics.isDrifting, inputs.backward && carPhysics.speed > 0);
+
+      // 6. Détection de collision d'impact (murs ou décors durs)
+      checkObstacleCollisions();
+    }
+
+    // Vérifier si la voiture est hors de la piste goudronnée
+    function checkIfOffRoad(pos) {
+      // Trouver la distance minimale entre la voiture et le centre de la piste (Spline)
+      const u = trackSpline.getUtoTmapping(0); // init map
+      const proj = trackSpline.projectOnImpl_ = trackSpline.projectOnImpl_ || new THREE.Vector3();
+      
+      // Méthode simplifiée mais rapide : échantillonner 20 segments pour trouver le plus proche
+      let minDist = Infinity;
+      for (let i = 0; i < numSegments; i++) {
+        const dist = pos.distanceTo(roadCenterPoints[i]);
+        if (dist < minDist) {
+          minDist = dist;
+        }
+      }
+
+      // Si la distance au centre est supérieure à la moitié de la largeur de la route
+      return minDist > (trackWidth / 2);
+    }
+
+    // Détecter et résoudre les collisions avec les gros rochers décoratifs
+    function checkObstacleCollisions() {
+      const carRadius = 2.4;
+      obstacleColliders.forEach(col => {
+        const dist = car.position.distanceTo(col.position);
+        const minDist = col.radius + carRadius;
+        
+        if (dist < minDist) {
+          // Collision ! Recul physique
+          const pushDirection = new THREE.Vector3().subVectors(car.position, col.position).setY(0).normalize();
+          car.position.addScaledVector(pushDirection, (minDist - dist) + 0.1);
+          
+          // Rebond
+          carPhysics.speed = -carPhysics.speed * 0.45;
+          triggerCrashSound();
+        }
+      });
+    }
+
+    // Réinitialiser la voiture sur la piste (en cas de blocage ou bug)
+    function resetCar() {
+      // Trouver le checkpoint le plus proche validé ou le départ
+      let respawnPoint = trackPoints[0].clone();
+      let respawnHeading = 0;
+
+      // Trouver le dernier checkpoint validé
+      let lastPassedIndex = -1;
+      for (let i = checkpoints.length - 1; i >= 0; i--) {
+        if (checkpoints[i].passed) {
+          lastPassedIndex = i;
+          break;
+        }
+      }
+
+      if (lastPassedIndex !== -1) {
+        respawnPoint.copy(checkpoints[lastPassedIndex].pos);
+        const tangent = trackSpline.getTangentAt(checkpoints[lastPassedIndex].t).normalize();
+        respawnHeading = Math.atan2(tangent.x, tangent.z);
+      } else {
+        const tangent = trackSpline.getTangentAt(0).normalize();
+        respawnHeading = Math.atan2(tangent.x, tangent.z);
+      }
+
+      car.position.copy(respawnPoint);
+      car.position.y = 0.55;
+      carPhysics.heading = respawnHeading;
+      carPhysics.speed = 0;
+      carPhysics.velocity.set(0, 0, 0);
+      carPhysics.steerAngle = 0;
+      car.rotation.set(0, respawnHeading, 0);
+    }
+
+    // Lier le bouton de reset du HUD
+    document.getElementById('reset-car-btn').addEventListener('click', resetCar);
+
+    // Système de Gestion de Course et Chronométrage
+    let gameTime = 0;
+    let lapStartTime = 0;
+    let bestLapTime = Infinity;
+    let countdownActive = false;
+    let countdownTimer = 3;
+    let raceStarted = false;
+
+    function startRaceCountdown() {
+      const countdownText = document.getElementById('countdown-text');
+      countdownActive = true;
+      countdownTimer = 3;
+      countdownText.textContent = "3";
+      countdownText.className = "text-7xl md:text-8xl font-black font-hud text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-amber-500 countdown-animate";
+
+      const interval = setInterval(() => {
+        countdownTimer--;
+        if (countdownTimer === 2) {
+          countdownText.textContent = "2";
+          playCountdownTone(440);
+        } else if (countdownTimer === 1) {
+          countdownText.textContent = "1";
+          playCountdownTone(440);
+        } else if (countdownTimer === 0) {
+          countdownText.textContent = "DRIFT !";
+          countdownText.className = "text-6xl md:text-7xl font-black font-hud text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 to-teal-500 countdown-animate";
+          playCountdownTone(880);
+          countdownActive = false;
+          raceStarted = true;
+          lapStartTime = performance.now();
+        } else if (countdownTimer < 0) {
+          countdownText.classList.add('hidden');
+          clearInterval(interval);
+        }
+      }, 1000);
+
+      playCountdownTone(440);
+    }
+
+    function playCountdownTone(freq) {
+      if (!audioEnabled) return;
+      try {
+        const synth = new Tone.Synth().toDestination();
+        synth.triggerAttackRelease(freq, "8n");
+      } catch (e) {}
+    }
+
+    // Formatter le chronomètre en MM:SS.CC
+    function formatTime(ms) {
+      if (ms === Infinity || isNaN(ms)) return "--:--.--";
+      const totalSeconds = ms / 1000;
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = Math.floor(totalSeconds % 60);
+      const centiseconds = Math.floor((ms % 1000) / 10);
+      
+      const minStr = minutes.toString().padStart(2, '0');
+      const secStr = seconds.toString().padStart(2, '0');
+      const centiStr = centiseconds.toString().padStart(2, '0');
+      return `${minStr}:${secStr}.${centiStr}`;
+    }
+
+    function updateGameTime() {
+      if (!raceStarted || countdownActive) return;
+
+      const now = performance.now();
+      const currentLapDuration = now - lapStartTime;
+
+      // Affichage du chronomètre
+      document.getElementById('timer-val').textContent = formatTime(currentLapDuration);
+
+      // Détecter le passage à travers les Checkpoints
+      const carRadius = 2.4;
+      const cpProgressText = document.getElementById('checkpoint-progress');
+      let passedCount = 0;
+
+      checkpoints.forEach((cp, index) => {
+        const dist = car.position.distanceTo(cp.pos);
+        if (dist < 10 && !cp.passed) {
+          // Le joueur doit passer les checkpoints plus ou moins dans l'ordre pour éviter la triche
+          const previousPassed = index === 0 || checkpoints[index - 1].passed;
+          if (previousPassed) {
+            cp.passed = true;
+            triggerCheckpointEffect(index);
+          }
+        }
+        if (cp.passed) passedCount++;
+      });
+
+      cpProgressText.textContent = `${passedCount} / ${checkpoints.length}`;
+
+      // Ligne d'arrivée (Checkpoint de départ 0m/t=0)
+      const distToStart = car.position.distanceTo(trackPoints[0]);
+      if (distToStart < 12) {
+        // Pour valider un tour complet, tous les checkpoints doivent être passés !
+        const allPassed = checkpoints.every(cp => cp.passed);
+        if (allPassed) {
+          // Nouveau tour complété !
+          if (currentLapDuration > 5000) { // Anti-spam / Sécurité minimale 5 sec
+            if (currentLapDuration < bestLapTime) {
+              bestLapTime = currentLapDuration;
+              document.getElementById('best-val').textContent = formatTime(bestLapTime);
+              showLapBanner("NEW TOUR RECORD !");
+            } else {
+              showLapBanner("TOUR COMPLETED !");
+            }
+
+            // Reset l'état des checkpoints pour le prochain tour
+            checkpoints.forEach(cp => cp.passed = false);
+            lapStartTime = performance.now();
+          }
+        }
+      }
+    }
+
+    function triggerCheckpointEffect(index) {
+      // Flasher le checkpoint validé en vert temporairement
+      if (checkpointMeshes[index]) {
+        const mat = checkpointMeshes[index].children[0].material;
+        mat.color.setHex(0x10b981); // Vert
+        
+        setTimeout(() => {
+          mat.color.setHex(0x00f3ff); // Retour au néon d'origine
+        }, 1200);
+      }
+
+      // Petit son de réussite
+      if (audioEnabled) {
+        try {
+          const synth = new Tone.PolySynth().toDestination();
+          synth.triggerAttackRelease(["E5", "G#5"], "16n");
+        } catch(e) {}
+      }
+    }
+
+    function showLapBanner(text) {
+      const banner = document.getElementById('drift-alert');
+      const originalText = banner.textContent;
+      
+      banner.textContent = text;
+      banner.className = "text-base font-black font-hud text-teal-300 bg-emerald-950/95 border border-emerald-500/50 px-6 py-2.5 rounded-full tracking-wider uppercase shadow-xl shadow-emerald-500/20 scale-110 opacity-100 transition-all mt-32";
+      
+      setTimeout(() => {
+        banner.className = "text-sm font-black font-hud text-cyan-400 bg-cyan-950/80 border border-cyan-500/30 px-4 py-1.5 rounded-full tracking-widest uppercase shadow-lg shadow-cyan-500/10 opacity-0 transition-all scale-75 mt-32";
+        setTimeout(() => { banner.textContent = originalText; }, 500);
+      }, 3500);
+    }
+
+    // Rendu de la Mini-Carte 2D
+    const minimapCanvas = document.getElementById('minimap-canvas');
+    const mCtx = minimapCanvas.getContext('2d');
+
+    function drawMinimap() {
+      mCtx.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+
+      // Calculer l'ajustement automatique de l'échelle selon les limites de la piste
+      const cx = minimapCanvas.width / 2;
+      const cy = minimapCanvas.height / 2;
+      const scale = 0.17; // Facteur de zoom de la map
+
+      // Tracer la piste d'asphalte grise
+      mCtx.strokeStyle = "rgba(75, 85, 99, 0.75)";
+      mCtx.lineWidth = 11;
+      mCtx.lineCap = "round";
+      mCtx.lineJoin = "round";
+      mCtx.beginPath();
+      
+      roadCenterPoints.forEach((p, index) => {
+        // Translation centrée
+        const mx = cx + p.x * scale;
+        const my = cy + p.z * scale;
+        if (index === 0) mCtx.moveTo(mx, my);
+        else mCtx.lineTo(mx, my);
+      });
+      mCtx.closePath();
+      mCtx.stroke();
+
+      // Tracer les Checkpoints validés/non-validés
+      checkpoints.forEach(cp => {
+        const mx = cx + cp.pos.x * scale;
+        const my = cy + cp.pos.z * scale;
+        mCtx.fillStyle = cp.passed ? "#10b981" : "#00f3ff";
+        mCtx.beginPath();
+        mCtx.arc(mx, my, 3.5, 0, Math.PI * 2);
+        mCtx.fill();
+      });
+
+      // Tracer le départ (Drapeau à damier ou ligne rouge)
+      const startX = cx + trackPoints[0].x * scale;
+      const startZ = cx + trackPoints[0].z * scale;
+      mCtx.fillStyle = "#ffffff";
+      mCtx.fillRect(startX - 3, startZ - 3, 6, 6);
+
+      // Tracer l'icône de la voiture du joueur (Cercle jaune)
+      const playerX = cx + car.position.x * scale;
+      const playerZ = cy + car.position.z * scale;
+      
+      // Petit triangle orienté pour indiquer le cap
+      mCtx.save();
+      mCtx.translate(playerX, playerZ);
+      mCtx.rotate(carPhysics.heading);
+      mCtx.fillStyle = selectedCarColorValue; // Utiliser la couleur de la voiture
+      mCtx.beginPath();
+      mCtx.moveTo(0, -6);
+      mCtx.lineTo(4, 4);
+      mCtx.lineTo(-4, 4);
+      mCtx.closePath();
+      mCtx.fill();
+      mCtx.restore();
+    }
+
+    // Positionnement et suivi fluide de la caméra de derrière
+    function updateCamera(dt) {
+      // Calcul du décalage (offset) de derrière la voiture
+      // Se base sur la direction et l'orientation actuelle du véhicule
+      const cameraOffset = new THREE.Vector3(
+        -Math.sin(carPhysics.heading) * 11.5,
+        4.2, // Hauteur caméra
+        -Math.cos(carPhysics.heading) * 11.5
+      );
+
+      const targetCamPos = car.position.clone().add(cameraOffset);
+      
+      // Interpolation linéaire pour adoucir le mouvement de caméra
+      camera.position.lerp(targetCamPos, 8 * dt);
+      
+      // Caméra regarde un point légèrement devant la voiture
+      const lookTarget = car.position.clone().addScaledVector(
+        new THREE.Vector3(Math.sin(carPhysics.heading), 0, Math.cos(carPhysics.heading)), 
+        2.5
+      );
+      camera.lookAt(lookTarget);
+    }
+
+    // Boucle d'animation principale (Main Loop)
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      
+      const dt = Math.min(clock.getDelta(), 0.1); // Sécurité anti-saccades géantes
+      const elapsed = clock.getElapsedTime();
+
+      // Mises à jour du jeu
+      updatePhysics(dt);
+      updateParticles(dt);
+      updateCamera(dt);
+      updateGameTime();
+      drawMinimap();
+
+      // UI HUD : Boîte automatique & RPM
+      const currentSpeedKmh = Math.round(Math.abs(carPhysics.speed));
+      document.getElementById('speed-val').textContent = currentSpeedKmh;
+      
+      // RPM Bar
+      const rpmRatio = (currentSpeedKmh % 35) / 35; // Factice pour l'effet boîte de vitesse
+      document.getElementById('rpm-bar').style.width = `${Math.round(20 + rpmRatio * 80)}%`;
+      
+      // Calcul du rapport engagé (Gear)
+      let gear = "N";
+      if (carPhysics.speed < -1) gear = "R";
+      else if (currentSpeedKmh === 0) gear = "N";
+      else if (currentSpeedKmh < 28) gear = "1";
+      else if (currentSpeedKmh < 52) gear = "2";
+      else if (currentSpeedKmh < 76) gear = "3";
+      else if (currentSpeedKmh < 95) gear = "4";
+      else gear = "5";
+      document.getElementById('gear-val').textContent = gear;
+
+      // Animer l'eau de l'océan
+      ocean.position.y = -2.2 + Math.sin(elapsed * 0.95) * 0.15;
+
+      renderer.render(scene, camera);
+    }
+
+    // Gestion du démarrage depuis l'écran d'accueil
+    document.getElementById('start-btn').addEventListener('click', () => {
+      // Activer l'audio
+      initAudio();
+      
+      // Cacher le lobby, afficher le HUD
+      document.getElementById('lobby-screen').classList.add('hidden');
+      const hudLayer = document.getElementById('hud-layer');
+      hudLayer.classList.remove('opacity-0');
+      hudLayer.style.opacity = "1";
+
+      // Réinitialiser la voiture au cas où
+      resetCar();
+
+      // Déclencher le compte à rebours de départ !
+      setTimeout(() => {
+        startRaceCountdown();
+      }, 500);
+    });
+
+    // Lancer la boucle globale au chargement
+    window.onload = function () {
+      animate();
+    };
+
+  </script>
+</body>
+</html>
